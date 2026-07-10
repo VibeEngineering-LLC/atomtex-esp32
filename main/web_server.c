@@ -19,6 +19,7 @@
 #include "esp_wifi.h"
 #include "esp_timer.h"
 #include "esp_littlefs.h"
+#include "esp_heap_caps.h"
 #include "esp_random.h"
 #include "bdkg_log.h"   // E5 (#BDKG-5): регистрация хендлеров логов БДКГ-05
 #include "bdkg_mqtt.h"   // E7 (#BDKG-7): конфиг/статус MQTT-паблишера
@@ -156,27 +157,29 @@ static esp_err_t handle_bdkg_json(httpd_req_t *req)
     return ESP_OK;
 }
 
-// #BDKG-17: история последних 300 отсчётов с платы (JSON). Буфер в куче, НЕ на стеке.
+// #BDKG-41: вся RAM-история (до BDKG_HIST_MAX точек) — JSON чанками. Точки в PSRAM.
 static esp_err_t handle_bdkg_history_json(httpd_req_t *req)
 {
-    bdkg_hist_point_t *pts = malloc(sizeof(bdkg_hist_point_t) * 300);
+    size_t cap = bdkg_usb_hist_capacity();
+    bdkg_hist_point_t *pts = heap_caps_malloc(sizeof(bdkg_hist_point_t) * cap, MALLOC_CAP_SPIRAM);
+    if (!pts) pts = malloc(sizeof(bdkg_hist_point_t) * cap);
     if (!pts) { httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM"); return ESP_FAIL; }
-    size_t np = bdkg_usb_get_history(pts, 300);
-    size_t cap = 16384;
-    char *out = malloc(cap);
-    if (!out) { free(pts); httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM"); return ESP_FAIL; }
+    size_t np = bdkg_usb_get_history(pts, cap);
+    httpd_resp_set_type(req, "application/json");
+    char buf[1024];
     size_t p = 0;
-    p += snprintf(out + p, cap - p, "{\"points\":[");
-    for (size_t i = 0; i < np && p < cap - 96; i++) {
-        p += snprintf(out + p, cap - p,
+    p += snprintf(buf + p, sizeof(buf) - p, "{\"points\":[");
+    for (size_t i = 0; i < np; i++) {
+        p += snprintf(buf + p, sizeof(buf) - p,
             "%s{\"t\":%lld,\"med\":%.4f,\"cps\":%.2f,\"temp\":%.2f}",
             i ? "," : "", (long long)pts[i].t_unix,
             pts[i].med_sv_h * 1e6, pts[i].cps_inst, pts[i].temp_c);  // #BDKG-28 график = сырое ЦПС
+        if (p > sizeof(buf) - 128) { httpd_resp_send_chunk(req, buf, p); p = 0; }
     }
-    p += snprintf(out + p, cap - p, "]}");
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, out, p);
-    free(out); free(pts);
+    p += snprintf(buf + p, sizeof(buf) - p, "]}");
+    httpd_resp_send_chunk(req, buf, p);
+    httpd_resp_send_chunk(req, NULL, 0);
+    free(pts);
     return ESP_OK;
 }
 // #BDKG-16 «Сброс замера»: асинхронно триггерит реинициализацию прибора.

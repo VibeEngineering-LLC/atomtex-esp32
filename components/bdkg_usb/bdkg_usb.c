@@ -9,7 +9,9 @@
 #include "freertos/stream_buffer.h"
 #include "freertos/semphr.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 
 static const char *TAG = "bdkg_usb";
@@ -23,10 +25,10 @@ static bdkg_snapshot_t s_snap = {0};
 static SemaphoreHandle_t s_snap_mtx = NULL;
 static void snap_publish(const bdkg05_reading_t *r);
 
-// #BDKG-17: on-board кольцо истории (300 точек, ~5.9 КБ .bss). Пишется в poll_task
-// под s_snap_mtx, читается /api/bdkg/history. s_hist_n растёт до 300 и стопорится.
-#define BDKG_HIST_MAX 300
-static bdkg_hist_point_t s_hist[BDKG_HIST_MAX];
+// #BDKG-41: on-board кольцо истории (BDKG_HIST_MAX точек, ~86 КБ в PSRAM). Пишется
+// в poll_task под s_snap_mtx, читается /api/bdkg/history, сидится на boot с флеша.
+// Аллокация в PSRAM (fallback — internal). Пока s_hist==NULL история отключена.
+static bdkg_hist_point_t *s_hist = NULL;
 static size_t s_hist_idx = 0, s_hist_n = 0;
 
 // #BDKG-16 «Сброс замера»: poll_task на след. итерации переинициализирует прибор.
@@ -149,36 +151,6 @@ static void poll_task(void *arg) {
     s = bdkg05_init(&h);
     ESP_LOGI(TAG, "init -> %d", s);
 
-    // DIAG H2 (systematic-debug, single-var): МЭД(FC04 0x0008)=0 при init->0.
-    // Локализация: FC03 holding control-рег 0x0000 (режим?) + фон МЭД 0x000A
-    // (референс read_background тут читал 0.091 мкЗв/ч). bg!=0 → dosimeter-space
-    // жив, МЭД=0 = dose-engine/HV не стартанул; bg=0 → режим не переключился.
-    {
-        uint8_t req[8], resp[64], pl[64]; size_t rl, rn = 0, pn = 0; uint8_t exc = 0;
-        rl = mb_build_read_holding(req, BDKG05_DEFAULT_ADDR, 0x0000, 1);
-        if (txn(NULL, req, rl, resp, sizeof(resp), &rn) == 0 &&
-            mb_parse_response(resp, rn, MB_FC_READ_HOLDING, pl, sizeof(pl), &pn, &exc) == MB_OK)
-            ESP_LOGI(TAG, "DIAG hold[0x0000]=%02x%02x bc=%u", pl[1], pl[2], (unsigned)pl[0]);
-        else ESP_LOGW(TAG, "DIAG hold[0x0000] fail rn=%u exc=%d", (unsigned)rn, exc);
-        rl = mb_build_read_holding(req, BDKG05_DEFAULT_ADDR, 0x000A, 2);
-        if (txn(NULL, req, rl, resp, sizeof(resp), &rn) == 0 &&
-            mb_parse_response(resp, rn, MB_FC_READ_HOLDING, pl, sizeof(pl), &pn, &exc) == MB_OK) {
-            union { uint32_t u; float f; } c;
-            c.u = ((uint32_t)pl[1]<<24)|((uint32_t)pl[2]<<16)|((uint32_t)pl[3]<<8)|pl[4];
-            ESP_LOGI(TAG, "DIAG bg_med[0x000A]=%.4e raw=%02x%02x%02x%02x", c.f, pl[1], pl[2], pl[3], pl[4]);
-        } else ESP_LOGW(TAG, "DIAG bg_med fail rn=%u exc=%d", (unsigned)rn, exc);
-        // DIAG H4: сырьё FC04 0x0004 (рабочий CPS=96) vs 0x0008 (нулевой МЭД).
-        // Тот же FC/длина/транспорт, соседние адреса — сравнить кадры на границе.
-        for (uint16_t reg = 0x0004; reg <= 0x0008; reg += 4) {
-            rl = mb_build_read_input(req, BDKG05_DEFAULT_ADDR, reg, 2);
-            rn = 0;
-            int io = txn(NULL, req, rl, resp, sizeof(resp), &rn);
-            ESP_LOGI(TAG, "DIAG raw FC04[0x%04x] io=%d rn=%u : %02x %02x %02x %02x %02x %02x %02x %02x %02x",
-                     reg, io, (unsigned)rn, resp[0], resp[1], resp[2], resp[3],
-                     resp[4], resp[5], resp[6], resp[7], resp[8]);
-        }
-    }
-
     // E4: непрерывный опрос 1 Гц. Каждый успешный отсчёт публикуется в snapshot
     // (web /api/bdkg). Логи прорежены — INFO раз в 30 с, WARN на каждый сбой.
     unsigned n = 0;
@@ -195,7 +167,7 @@ static void poll_task(void *arg) {
         if (s == BDKG05_OK && r.valid) {
             snap_publish(&r);
             // #BDKG-17: записать точку истории под тем же мьютексом.
-            if (s_snap_mtx) {
+            if (s_snap_mtx && s_hist) {
                 xSemaphoreTake(s_snap_mtx, portMAX_DELAY);
                 s_hist[s_hist_idx].t_unix   = (int64_t)time(NULL);
                 s_hist[s_hist_idx].med_sv_h = r.med_sv_h;
@@ -221,6 +193,13 @@ void bdkg_usb_init(void) {
     if (s_inited) return;   // main.c: headless-before-WiFi (стр.42) + после spectrum_init (стр.77)
     s_inited = true;
     if (!s_snap_mtx) s_snap_mtx = xSemaphoreCreateMutex();
+    // #BDKG-41: кольцо истории в PSRAM (fallback internal). ~86 КБ.
+    if (!s_hist) {
+        s_hist = heap_caps_malloc(sizeof(bdkg_hist_point_t) * BDKG_HIST_MAX, MALLOC_CAP_SPIRAM);
+        if (!s_hist) s_hist = malloc(sizeof(bdkg_hist_point_t) * BDKG_HIST_MAX);
+        if (!s_hist) ESP_LOGE(TAG, "history ring alloc failed (%u B)",
+                              (unsigned)(sizeof(bdkg_hist_point_t) * BDKG_HIST_MAX));
+    }
     s_rx = xStreamBufferCreate(1024, 1);
     const usb_host_config_t hc = {
         .skip_phy_setup = false,
@@ -269,7 +248,7 @@ bool bdkg_usb_get_latest(bdkg_snapshot_t *out) {
 // #BDKG-17: копия кольца истории в хронологическом порядке (старые→новые).
 // Если max < числа накопленных точек — отдаём max НОВЕЙШИХ.
 size_t bdkg_usb_get_history(bdkg_hist_point_t *out, size_t max) {
-    if (!out || max == 0 || !s_snap_mtx) return 0;
+    if (!out || max == 0 || !s_snap_mtx || !s_hist) return 0;
     xSemaphoreTake(s_snap_mtx, portMAX_DELAY);
     size_t n = s_hist_n;
     if (n > max) n = max;
@@ -279,5 +258,19 @@ size_t bdkg_usb_get_history(bdkg_hist_point_t *out, size_t max) {
         out[i] = s_hist[(start + skip + i) % BDKG_HIST_MAX];
     xSemaphoreGive(s_snap_mtx);
     return n;
+}
+
+// #BDKG-41: ёмкость RAM-кольца.
+size_t bdkg_usb_hist_capacity(void) { return BDKG_HIST_MAX; }
+
+// #BDKG-41: засеять кольцо точками (хронологически). Замещает содержимое.
+void bdkg_usb_seed_history(const bdkg_hist_point_t *pts, size_t n) {
+    if (!pts || n == 0 || !s_snap_mtx || !s_hist) return;
+    if (n > BDKG_HIST_MAX) { pts += (n - BDKG_HIST_MAX); n = BDKG_HIST_MAX; }
+    xSemaphoreTake(s_snap_mtx, portMAX_DELAY);
+    for (size_t i = 0; i < n; i++) s_hist[i] = pts[i];
+    s_hist_n   = n;
+    s_hist_idx = (n == BDKG_HIST_MAX) ? 0 : n;   // след. запись после засеянных
+    xSemaphoreGive(s_snap_mtx);
 }
 

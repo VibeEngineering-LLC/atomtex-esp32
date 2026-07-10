@@ -28,8 +28,11 @@ typedef struct {
 // Copy the latest snapshot. Returns out->valid (false if no good reading yet).
 bool bdkg_usb_get_latest(bdkg_snapshot_t *out);
 
-// #BDKG-17: on-board history ring (last 300 successful 1 Hz samples). Точка =
-// момент времени + основные величины для восстановления живого графика после F5.
+// #BDKG-41: ёмкость RAM-кольца истории (было 300). Точек по 1 Гц = секунд окна.
+#define BDKG_HIST_MAX 3600
+
+// #BDKG-17/41: on-board history ring. Точка = момент времени + основные величины
+// для восстановления живого графика после F5 и после ребута (boot-preload с флеша).
 typedef struct {
     int64_t t_unix;    // time(NULL) в момент отсчёта (валиден после SNTP-синка)
     float   med_sv_h;  // Sv/h
@@ -41,6 +44,13 @@ typedef struct {
 // Копирует историю в хронологическом порядке (старые→новые) в out (до max точек).
 // Возвращает число реально записанных точек (0..min(300,max)).
 size_t bdkg_usb_get_history(bdkg_hist_point_t *out, size_t max);
+
+// #BDKG-41: ёмкость RAM-кольца (BDKG_HIST_MAX). Для аллокаций у вызывающих.
+size_t bdkg_usb_hist_capacity(void);
+
+// #BDKG-41: засеять RAM-кольцо истории точками (хронологически, старые→новые).
+// Замещает текущее содержимое кольца. Звать один раз на boot из bdkg_log_preload.
+void bdkg_usb_seed_history(const bdkg_hist_point_t *pts, size_t n);
 
 // #BDKG-16 «Сброс замера»: попросить poll-таск переинициализировать прибор
 // (bdkg05_init заново) на следующей итерации. Асинхронно, без блокировки.

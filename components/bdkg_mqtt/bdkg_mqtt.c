@@ -256,7 +256,7 @@ static void pub_task(void *arg)
         if (valid)
             n = snprintf(js, sizeof(js),
                 "{\"med\":%.3f,\"med_err\":%.1f,\"cps\":%.1f,\"cps_err\":%.1f,\"temp\":%.1f,\"dose\":%.2f,\"conn\":\"1\"}",
-                s.med_sv_h * 1e6, s.med_err_pct, s.cps_avg, s.cps_err_pct, s.temp_c, s.dose_sv * 1e6);
+                s.med_sv_h * 1e6, s.med_err_pct, s.cps_inst, s.cps_err_pct, s.temp_c, s.dose_sv * 1e6);
         else
             n = snprintf(js, sizeof(js), "{\"conn\":\"0\"}");
 

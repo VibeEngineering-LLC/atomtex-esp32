@@ -84,6 +84,7 @@ void app_main(void)
     }
 
     bdkg_log_init();
+    bdkg_log_preload();   // #BDKG-41: восстановить график с флеша после ребута
     bdkg_log_set_enabled(boot_config.autostart_bdkg_log);
 
     bdkg_mqtt_init();

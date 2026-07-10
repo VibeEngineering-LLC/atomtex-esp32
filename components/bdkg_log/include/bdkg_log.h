@@ -11,6 +11,10 @@ extern "C" {
 // Звать ПОСЛЕ монтирования storage (spectrum_init) и bdkg_usb_init. Идемпотентно.
 void bdkg_log_init(void);
 
+// #BDKG-41: восстановить RAM-кольцо графика последними точками с флеша (после ребута).
+// Звать ПОСЛЕ bdkg_log_init и bdkg_usb_init (сидит bdkg_usb-кольцо).
+void bdkg_log_preload(void);
+
 // Регистрация HTTP-хендлеров: GET /api/bdkg/logs (список) + GET /api/bdkg/log?date=... (скачать)
 // + POST /api/bdkg/log/start, POST /api/bdkg/log/stop (управление записью, CSRF).
 // Звать в web_server_init после создания httpd server.
