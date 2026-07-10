@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>БДКГ-05 — живые показания</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#21262d; --txt:#e6edf3; --dim:#8b949e;
+    --med:#f2a900; --cps:#38bdf8; --tmp:#4ade80; --bad:#f85149; --ok:#3fb950;
+    --accent:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  a{color:inherit;text-decoration:none}
+  header{display:flex;align-items:center;gap:14px;padding:14px 18px;
+         border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.02em}
+  .stat{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:13px;flex-wrap:wrap}
+  .badge{display:flex;align-items:center;gap:7px;color:var(--dim);
+         font-variant-numeric:tabular-nums}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+  .dot.on{background:var(--ok)}
+  .rdot{width:9px;height:9px;border-radius:50%;background:#5b655a}
+  .rdot.on{background:var(--bad);box-shadow:0 0 6px var(--bad)}
+  /* nav (2 вкладки, по образцу system.html) */
+  nav{display:flex;align-items:center;gap:2px;padding:0 18px;
+      border-bottom:1px solid var(--line);background:var(--panel);overflow-x:auto}
+  nav a{padding:12px 16px;font-size:13px;color:var(--dim);flex-shrink:0;white-space:nowrap}
+  nav a.on{font-weight:600;color:var(--txt);border-bottom:2px solid var(--accent)}
+  nav a:hover{color:var(--txt)}
+  main{max-width:none;margin:0 auto;padding:18px 24px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+  @media(max-width:640px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:14px 16px}
+  .card .lbl{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .card .val{font-size:30px;font-weight:700;margin-top:4px;
+             font-variant-numeric:tabular-nums}
+  .card .unit{font-size:14px;color:var(--dim);font-weight:400;margin-left:5px}
+  .card .err{font-size:15px;color:var(--dim);font-weight:400;margin-left:8px;
+             font-variant-numeric:tabular-nums}
+  .card.med .val{color:var(--med)} .card.cps .val{color:var(--cps)}
+  .card.tmp .val{color:var(--tmp)}
+  /* панель управления записью/экспортом */
+  .ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+  .ctrl button,.ctrl .btn{background:var(--bg);color:var(--txt);
+       border:1px solid var(--line);border-radius:6px;padding:7px 12px;
+       font:inherit;font-size:13px;cursor:pointer;display:inline-block}
+  .ctrl button:hover,.ctrl .btn:hover{border-color:var(--dim)}
+  .ctrl button:disabled{opacity:.5;cursor:not-allowed}
+  .ctrl .btn.danger{color:var(--bad);border-color:rgba(248,81,73,.4)}
+  .ctrl .msg{font-size:12px;color:var(--dim);margin-left:auto}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+         padding:12px 14px;margin-bottom:14px}
+  .chart .ct{font-size:13px;color:var(--dim);margin-bottom:6px;display:flex;
+             justify-content:space-between}
+  canvas{width:100%;height:240px;display:block}   /* #BDKG-24 МЭД/ЦПС выше */
+  #cTmp{height:96px}                              /* #BDKG-24 температура ниже */
+  .chart canvas{cursor:crosshair}
+  .sub{font-size:12px;color:var(--dim);text-align:center;margin-top:6px}
+  .hint{font-size:11px;color:var(--dim);text-align:center;margin-top:8px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <h1>БДКГ-05 — живые показания</h1>
+  <div class="stat">
+    <span class="badge" id="recBadge"><span id="recDot" class="rdot"></span><span id="recTxt">запись выкл</span></span>
+    <span class="badge" id="flashBadge">флеш: --</span>
+    <span class="badge"><span id="dot" class="dot"></span><span id="conn">нет связи</span></span>
+  </div>
+</header>
+<nav>
+  <a href="/bdkg" class="on">Мониторинг</a>
+  <a href="/bdkg/system">Система</a>
+</nav>
+<main>
+  <div class="cards">
+    <div class="card med"><div class="lbl">МЭД</div>
+      <div class="val"><span id="vMed">--</span><span class="unit">мкЗв/ч</span><span class="err" id="eMed"></span></div></div>
+    <div class="card cps"><div class="lbl">Скорость счёта</div>
+      <div class="val"><span id="vCps">--</span><span class="unit">имп/с</span><span class="err" id="eCps"></span></div></div>
+    <div class="card tmp"><div class="lbl">Температура</div>
+      <div class="val"><span id="vTmp">--</span><span class="unit">°C</span></div></div>
+  </div>
+  <div class="ctrl">
+    <button id="logStart" type="button">▶ Старт записи</button>
+    <button id="logStop" type="button">⏸ Стоп записи</button>
+    <button id="resetBtn" class="danger" type="button">⟲ Сброс замера</button>
+    <button id="exportBtn" class="btn" type="button">⭳ Скачать сегодня</button>
+    <label class="smachk"><input type="checkbox" id="smaChk" checked> Сглаживание</label>
+    <label class="smawin">окно, с <input type="number" id="smaWin" min="2" max="120" step="1" value="15"></label>
+    <span class="msg" id="ctrlMsg"></span>
+  </div>
+  <div class="chart"><div class="ct"><span>МЭД, мкЗв/ч</span><span id="rMed"></span></div>
+    <canvas id="cMed"></canvas></div>
+  <div class="chart"><div class="ct"><span>Скорость счёта, имп/с</span><span id="rCps"></span></div>
+    <canvas id="cCps"></canvas></div>
+  <div class="chart"><div class="ct"><span>Температура, °C</span><span id="rTmp"></span></div>
+    <canvas id="cTmp"></canvas></div>
+  <div class="sub">Накопленная доза: <span id="vDose">--</span> мкЗв · опрос 1 Гц · живое окно 300 с (история с платы)</div>
+  <div class="hint">Зум по X (время) — колесо мыши · зум по Y — Shift+колесо · панорама — перетаскивание · сброс масштаба — двойной клик</div>
+</main>
+<script>
+const WIN = 300;                          // sec of history
+let SMA_WIN = 15;                          // #BDKG-10/30 SMA window, sec (регулируемое)
+let smaOn = true;                          // #BDKG-27: переключатель СМА-оверлея
+const series = { med:[], cps:[], tmp:[], t:[] };   // #BDKG-17: series.t = unix seconds (parallel)
+const COL = { med:'#f2a900', cps:'#38bdf8', tmp:'#4ade80' };
+const SMA_COL = '#f0f6fc';                 // #BDKG-10 SMA overlay (near-white)
+
+// #BDKG-22 per-canvas zoom/pan state. xLo/xHi = index range (null=auto full),
+// yLo/yHi = value range (null=auto-fit). X и Y независимы.
+const zoom = {
+  cMed:{xLo:null,xHi:null,yLo:null,yHi:null},
+  cCps:{xLo:null,xHi:null,yLo:null,yHi:null},
+  cTmp:{xLo:null,xHi:null,yLo:null,yHi:null}
+};
+
+function push(arr, v){ arr.push(v); if(arr.length > WIN) arr.shift(); }
+
+function fmtSize(b){
+  if(b==null || !isFinite(b)) return '?';
+  if(b < 1024) return b + ' Б';
+  if(b < 1048576) return (b/1024).toFixed(1) + ' КБ';
+  return (b/1048576).toFixed(1) + ' МБ';
+}
+function fmtTime(t){
+  if(t==null || !isFinite(t)) return '';
+  const d = new Date(t*1000);
+  const p = x => String(x).padStart(2,'0');
+  return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+
+// #BDKG-10 trailing simple moving average, null-tolerant, partial at start
+function sma(arr, win){
+  const out = new Array(arr.length).fill(null);
+  let sum = 0, cnt = 0; const q = [];
+  for(let i=0;i<arr.length;i++){
+    const v = (arr[i]!=null && isFinite(arr[i])) ? arr[i] : null;
+    q.push(v); if(v!=null){ sum+=v; cnt++; }
+    if(q.length > win){ const old = q.shift(); if(old!=null){ sum-=old; cnt--; } }
+    out[i] = cnt>0 ? sum/cnt : null;
+  }
+  return out;
+}
+
+// --- #BDKG-22 zoom helpers ---
+function visIdxRange(id, n){
+  const z = zoom[id];
+  let i0 = z.xLo!=null ? z.xLo : 0;
+  let i1 = z.xHi!=null ? z.xHi : (n>1 ? n-1 : 1);
+  if(i1 <= i0) i1 = i0 + 1;
+  return [i0, i1];
+}
+function autoYRange(arr, i0, i1){
+  const a = Math.max(0, Math.floor(i0)), b = Math.min(arr.length-1, Math.ceil(i1));
+  let mn = Infinity, mx = -Infinity;
+  for(let i=a;i<=b;i++){ const v = arr[i]; if(v!=null && isFinite(v)){ if(v<mn)mn=v; if(v>mx)mx=v; } }
+  if(!isFinite(mn) || !isFinite(mx)){ mn = 0; mx = 1; }
+  if(mx-mn < 1e-9){ mx += 1; mn -= 1; }
+  const span = mx-mn; return [mn - span*0.1, mx + span*0.1];
+}
+function visYRange(id, arr, i0, i1){
+  const z = zoom[id];
+  if(z.yLo!=null && z.yHi!=null) return [z.yLo, z.yHi];
+  return autoYRange(arr, i0, i1);
+}
+
+function draw(id, arr, col, fmt, smaWin){
+  const cv = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext('2d'); g.scale(dpr,dpr);
+  g.clearRect(0,0,w,h);
+  const pad = {l:46,r:8,t:8,b:20};
+  const iw = w-pad.l-pad.r, ih = h-pad.t-pad.b;
+  const n = arr.length;
+  const [i0,i1] = visIdxRange(id, n);
+  const [mn,mx] = visYRange(id, arr, i0, i1);
+  const X = i => pad.l + iw*((i-i0)/(i1-i0));
+  const Y = v => pad.t + ih*(1-(v-mn)/(mx-mn));
+  // grid + Y labels
+  // #BDKG-25: адаптивная разрядность — узкий размах не должен давать дубли (0.070/0.070/0.070)
+  const span = mx - mn;
+  let dec = span < 0.02 ? 5 : span < 0.2 ? 4 : span < 2 ? 3 : span < 20 ? 2 : span < 200 ? 1 : 0;
+  const fmtL = v => v.toFixed(dec);
+  g.strokeStyle = '#21262d'; g.fillStyle = '#8b949e';
+  g.font = '11px system-ui'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for(let k=0;k<=3;k++){
+    const y = pad.t + ih*k/3, val = mx - (mx-mn)*k/3;
+    g.beginPath(); g.moveTo(pad.l,y); g.lineTo(w-pad.r,y); g.stroke();
+    g.fillText(fmtL(val), pad.l-5, y);
+  }
+  // #BDKG-22 X time labels (HH:MM:SS)
+  if(n > 1 && series.t.length){
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#8b949e';
+    const nl = 3;
+    for(let k=0;k<=nl;k++){
+      const idx = Math.round(i0 + (i1-i0)*k/nl);
+      if(idx < 0 || idx >= series.t.length) continue;
+      const label = fmtTime(series.t[idx]);
+      if(!label) continue;
+      let x = X(idx);
+      x = Math.max(pad.l+14, Math.min(w-pad.r-14, x));
+      g.fillText(label, x, h-6);
+    }
+  }
+  // clip line/overlay to plot area (важно при зуме/пане)
+  g.save();
+  g.beginPath(); g.rect(pad.l, pad.t, iw, ih); g.clip();
+  if(n > 1){
+    g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath();
+    let started = false;
+    for(let i=0;i<n;i++){
+      if(arr[i]==null || !isFinite(arr[i])){ started=false; continue; }
+      const x = X(i), y = Y(arr[i]);
+      if(!started){ g.moveTo(x,y); started=true; } else g.lineTo(x,y);
+    }
+    g.stroke();
+    // last point marker (если попадает в окно)
+    const li = n-1;
+    if(arr[li]!=null && isFinite(arr[li]) && li>=i0 && li<=i1){
+      g.fillStyle = col; g.beginPath(); g.arc(X(li),Y(arr[li]),2.6,0,7); g.fill();
+    }
+    // #BDKG-10 SMA overlay (МЭД / ЦПС only) — same mn/mx scale as raw
+    if(smaWin && smaWin > 1){
+      const s = sma(arr, smaWin);
+      g.strokeStyle = SMA_COL; g.lineWidth = 1.6; g.beginPath();
+      let st = false;
+      for(let i=0;i<s.length;i++){
+        if(s[i]==null){ st=false; continue; }
+        const x = X(i), y = Y(s[i]);
+        if(!st){ g.moveTo(x,y); st=true; } else g.lineTo(x,y);
+      }
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+function redraw(){
+  draw('cMed', series.med, COL.med, v=>v.toFixed(3), smaOn?SMA_WIN:0);
+  draw('cCps', series.cps, COL.cps, v=>v.toFixed(0), smaOn?SMA_WIN:0);
+  draw('cTmp', series.tmp, COL.tmp, v=>v.toFixed(1));
+}
+
+// #BDKG-22 wheel/drag/dblclick handlers per canvas
+function geomOf(cv){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const pad = {l:46,r:8,t:8,b:20};
+  return {w,h,pad,iw:w-pad.l-pad.r,ih:h-pad.t-pad.b};
+}
+function attachZoom(id, arr){
+  const cv = document.getElementById(id);
+  cv.addEventListener('wheel', ev=>{
+    const n = arr.length; if(n < 2) return;
+    ev.preventDefault();
+    const z = zoom[id];
+    const G = geomOf(cv);
+    const rect = cv.getBoundingClientRect();
+    const mx = ev.clientX-rect.left, my = ev.clientY-rect.top;
+    const factor = ev.deltaY < 0 ? 0.8 : 1.25;   // вниз колесо = отдаление
+    if(!ev.shiftKey){
+      // #BDKG-23: колесо = сжатие/растяжение временной шкалы (X), центр на курсоре
+      let [i0,i1] = visIdxRange(id, n);
+      const frac = Math.min(1, Math.max(0, (mx-G.pad.l)/G.iw));
+      const center = i0 + (i1-i0)*frac;
+      let ni0 = center - (center-i0)*factor;
+      let ni1 = center + (i1-center)*factor;
+      ni0 = Math.max(0, ni0); ni1 = Math.min(n-1, ni1);
+      if(ni1 - ni0 < 1) return;                  // минимум ~2 точки
+      z.xLo = ni0; z.xHi = ni1;
+    } else {
+      // Shift+колесо = зум по Y, центр на курсоре
+      let [i0,i1] = visIdxRange(id, n);
+      let [ylo,yhi] = visYRange(id, arr, i0, i1);
+      const frac = Math.min(1, Math.max(0, (my-G.pad.t)/G.ih));
+      const center = yhi - (yhi-ylo)*frac;
+      z.yLo = center - (center-ylo)*factor;
+      z.yHi = center + (yhi-center)*factor;
+    }
+    redraw();
+  }, {passive:false});
+
+  let drag = null;
+  cv.addEventListener('mousedown', ev=>{
+    const n = arr.length; if(n < 2) return;
+    let [i0,i1] = visIdxRange(id, n);
+    let [ylo,yhi] = visYRange(id, arr, i0, i1);
+    drag = {x:ev.clientX, y:ev.clientY, i0, i1, ylo, yhi};
+    ev.preventDefault();
+  });
+  cv.addEventListener('mousemove', ev=>{
+    if(!drag) return;
+    const n = arr.length;
+    const z = zoom[id];
+    const G = geomOf(cv);
+    const dxpx = ev.clientX-drag.x, dypx = ev.clientY-drag.y;
+    // pan X
+    const width = drag.i1 - drag.i0;
+    const di = -(dxpx/G.iw)*width;
+    let ni0 = drag.i0 + di, ni1 = drag.i1 + di;
+    if(width >= n-1){ ni0 = 0; ni1 = n-1; }
+    else{
+      if(ni0 < 0){ ni0 = 0; ni1 = width; }
+      if(ni1 > n-1){ ni1 = n-1; ni0 = n-1-width; }
+    }
+    z.xLo = ni0; z.xHi = ni1;
+    // pan Y
+    const dv = (dypx/G.ih)*(drag.yhi-drag.ylo);
+    z.yLo = drag.ylo + dv; z.yHi = drag.yhi + dv;
+    redraw();
+  });
+  window.addEventListener('mouseup', ()=>{ drag = null; });
+  cv.addEventListener('dblclick', ev=>{
+    ev.preventDefault();
+    const z = zoom[id]; z.xLo = z.xHi = z.yLo = z.yHi = null;
+    redraw();
+  });
+}
+
+async function tick(){
+  try{
+    const r = await fetch('/api/bdkg', {cache:'no-store'});
+    const d = await r.json();
+    const dot = document.getElementById('dot');
+    if(d.connected){ dot.classList.add('on');
+      document.getElementById('conn').textContent = d.valid?'связь есть':'ожидание данных'; }
+    else{ dot.classList.remove('on');
+      document.getElementById('conn').textContent = 'адаптер не найден'; }
+    // #BDKG-14 REC-индикатор
+    const rec = !!d.recording;
+    document.getElementById('recDot').classList.toggle('on', rec);
+    document.getElementById('recTxt').textContent = rec ? 'запись идёт' : 'запись выкл';
+    if(d.valid){
+      document.getElementById('vMed').textContent = d.med_usv_h.toFixed(3);
+      document.getElementById('vCps').textContent = d.cps.toFixed(1);
+      document.getElementById('vTmp').textContent = d.temp_c.toFixed(1);
+      document.getElementById('vDose').textContent = d.dose_usv.toFixed(3);
+      document.getElementById('eMed').textContent =
+        (d.med_err!=null && isFinite(d.med_err)) ? '± '+d.med_err.toFixed(1)+'%' : '';
+      document.getElementById('eCps').textContent =
+        (d.cps_err!=null && isFinite(d.cps_err)) ? '± '+d.cps_err.toFixed(1)+'%' : '';
+      // #BDKG-28: график ЦПС = мгновенное (сырое) cps_inst; карточка выше = усреднённое
+      push(series.med, d.med_usv_h); push(series.cps, d.cps_inst); push(series.tmp, d.temp_c);
+      push(series.t, Date.now()/1000);    // #BDKG-17 live-tick: сервер /api/bdkg t не отдаёт
+      redraw();
+    }
+  }catch(e){
+    document.getElementById('dot').classList.remove('on');
+    document.getElementById('conn').textContent = 'нет связи';
+  }
+}
+window.addEventListener('resize', redraw);
+// #BDKG-10/30 legend: near-white dash = СМА (окно динамическое)
+function updateSmaLeg(){
+  const leg = smaOn ? '<span style="color:'+SMA_COL+'">—</span> SMA '+SMA_WIN+' с' : '';
+  document.getElementById('rMed').innerHTML = leg;
+  document.getElementById('rCps').innerHTML = leg;
+}
+updateSmaLeg();
+
+// #BDKG-14 свободное место флеша (раздельный интервал, не 1 Гц)
+async function refreshFlash(){
+  try{
+    const r = await fetch('/api/system', {cache:'no-store'});
+    const d = await r.json();
+    const ft = d.flash_total||0, fu = d.flash_used||0;
+    const free = Math.max(0, ft-fu);
+    document.getElementById('flashBadge').textContent = 'флеш: '+fmtSize(free)+' своб.';
+  }catch(e){ /* пропустить цикл */ }
+}
+
+// #BDKG-17 история с платы (детерминированный источник, F5 стабилен)
+async function loadHistory(){
+  try{
+    const r = await fetch('/api/bdkg/history', {cache:'no-store'});
+    if(!r.ok) return;
+    const d = await r.json();
+    const pts = (d && Array.isArray(d.points)) ? d.points : [];
+    for(const p of pts){
+      series.med.push(p.med); series.cps.push(p.cps);
+      series.tmp.push(p.temp); series.t.push(p.t);
+    }
+    while(series.med.length > WIN){
+      series.med.shift(); series.cps.shift(); series.tmp.shift(); series.t.shift();
+    }
+    redraw();
+  }catch(e){ /* нет истории — живой tick сам наполнит */ }
+}
+
+// --- #BDKG-16 CSRF + управление записью/сбросом (по образцу system.html) ---
+let csrfToken = '';
+async function loadCsrf(){ try{ const r = await (await fetch('/api/csrf-token')).json(); csrfToken = r.token||''; }catch(e){} }
+function post(url, opts){ opts = opts||{}; opts.method = 'POST';
+  opts.headers = Object.assign({}, opts.headers||{}, {'X-CSRF-Token':csrfToken}); return fetch(url, opts); }
+
+function setCtrlMsg(s){ const el = document.getElementById('ctrlMsg'); el.textContent = s||'';
+  if(s) setTimeout(()=>{ if(el.textContent===s) el.textContent=''; }, 2500); }
+
+async function doLog(on){
+  const bS = document.getElementById('logStart'), bT = document.getElementById('logStop');
+  bS.disabled = true; bT.disabled = true;
+  try{
+    const r = await post('/api/bdkg/log/'+(on?'start':'stop'));
+    setCtrlMsg(r.ok ? (on?'запись включена':'запись остановлена') : 'ошибка');
+  }catch(e){ setCtrlMsg('ошибка запроса'); }
+  finally{ bS.disabled = false; bT.disabled = false; }
+}
+
+async function doReset(){
+  if(!confirm('Сбросить замер на приборе? Живые графики будут очищены.')) return;
+  const b = document.getElementById('resetBtn'); b.disabled = true;
+  try{
+    const r = await post('/api/bdkg/reset');
+    // client-side: обнулить серии и масштаб, перерисовать с нуля
+    series.med.length = 0; series.cps.length = 0; series.tmp.length = 0; series.t.length = 0;
+    for(const k in zoom){ zoom[k].xLo = zoom[k].xHi = zoom[k].yLo = zoom[k].yHi = null; }
+    redraw();
+    setCtrlMsg(r.ok ? 'замер сброшен' : 'ошибка');
+  }catch(e){ setCtrlMsg('ошибка запроса'); }
+  finally{ b.disabled = false; }
+}
+
+// #BDKG-15 экспорт: последняя дата из /api/bdkg/logs (надёжнее клиентской TZ)
+async function doExport(){
+  const b = document.getElementById('exportBtn'); b.disabled = true;
+  try{
+    const r = await fetch('/api/bdkg/logs', {cache:'no-store'});
+    const d = await r.json();
+    const files = (d && Array.isArray(d.files)) ? d.files : [];
+    if(!files.length){ setCtrlMsg('нет логов на плате'); return; }
+    const date = files.map(f=>f.date).sort().pop();   // самый свежий = сегодня
+    window.location = '/api/bdkg/log?date='+encodeURIComponent(date);
+  }catch(e){ setCtrlMsg('ошибка экспорта'); }
+  finally{ b.disabled = false; }
+}
+
+document.getElementById('logStart').addEventListener('click', ()=>doLog(true));
+document.getElementById('logStop').addEventListener('click', ()=>doLog(false));
+document.getElementById('resetBtn').addEventListener('click', doReset);
+document.getElementById('exportBtn').addEventListener('click', doExport);
+document.getElementById('smaChk').addEventListener('change', e=>{ smaOn = e.target.checked; updateSmaLeg(); redraw(); }); // #BDKG-27
+document.getElementById('smaWin').addEventListener('change', e=>{ // #BDKG-30 окно усреднения
+  let v = Math.max(2, Math.min(120, parseInt(e.target.value,10)||15));
+  SMA_WIN = v; e.target.value = v; updateSmaLeg(); redraw();
+});
+
+attachZoom('cMed', series.med);
+attachZoom('cCps', series.cps);
+attachZoom('cTmp', series.tmp);
+
+// старт: CSRF + свободное место + история → живой опрос
+loadCsrf();
+refreshFlash(); setInterval(refreshFlash, 8000);
+loadHistory().finally(()=>{ tick(); setInterval(tick, 1000); });
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+# AtomSpectra Gateway — ESP32-S3-N16R8
+# USB Host + WiFi + Web Server + LittleFS
+
+# Target
+CONFIG_IDF_TARGET="esp32s3"
+
+# Flash / PSRAM
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# USB Host
+CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=1024
+CONFIG_USB_HOST_HW_BUFFER_BIAS_BALANCED=y
+CONFIG_USB_HOST_ENABLE_ENUM_FILTER_CALLBACK=y
+
+# WiFi
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+
+# Network — больше сокетов для частого polling Web UI (иначе httpd accept errno 23)
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# #TCP-1: дефолтный TCP send-буфер/окно = 5760 Б (~100 мс потока спектры @ 58 КБ/с).
+# Любой джиттер WiFi 2.4 ГГц >100 мс переполнял его → потеря байт в TCP-мосте.
+# Поднимаем до 64 КБ (максимум без window scaling) — мост терпит секунды задержки.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65535
+CONFIG_LWIP_TCP_WND_DEFAULT=65535
+
+# WebSocket support для /ws/waterfall (live-стрим строк спектрограммы)
+CONFIG_HTTPD_WS_SUPPORT=y
+
+# #UI-33: Ctrl+F5 (hard reload) шлёт заголовки >512 Б (Authorization Basic +
+# Sec-Fetch-* + Accept* + no-cache) → httpd отвечал 431 и UI обваливался.
+# Поднимаем лимит блока заголовков и URI до 1024 Б.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=1024
+
+# LittleFS for spectrum storage
+CONFIG_LITTLEFS_MAX_PARTITIONS=3
+
+# Logging
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Task watchdog
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
+
+# Partition table
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# #SEC-1: шифрование NVS (пароль WiFi во flash) — ОПЦИОНАЛЬНО, по умолчанию ВЫКЛ
+# ─────────────────────────────────────────────────────────────────────────────
+# Пароль WiFi (а также basic-auth Web UI и OTA) хранится в разделе nvs открытым
+# текстом (см. wifi_manager.c). Любой с физическим доступом к плате может вычитать
+# flash (esptool read_flash 0x9000 0x6000) и достать пароль строкой. Для модели
+# "доверенный домашний LAN" это принято; если плата стоит в недоверенной среде —
+# включите шифрование, раскомментировав блок ниже.
+#
+# ⚠ ВНИМАНИЕ — НЕОБРАТИМО. Flash encryption прожигает eFuse на чипе ESP32-S3:
+#   • процесс нельзя откатить, чип нельзя вернуть в исходное состояние;
+#   • в Release-режиме перепрошивка по UART блокируется навсегда;
+#   • ошибка в конфигурации может окирпичить плату.
+# Включать ТОЛЬКО осознанно, прочитав официальную документацию Espressif
+# (Security → Flash Encryption, NVS Encryption). Последствия и порядок действий —
+# в INSTALL.md, раздел "9. Безопасность".
+#
+# Чтобы включить: раскомментировать 2 строки ниже, пересобрать с нуля
+# (idf.py fullclean && idf.py build) и прошить.
+#
+#CONFIG_SECURE_FLASH_ENC_ENABLED=y
+#CONFIG_NVS_ENCRYPTION=y
+
+# #WF-1 шаг 3: auto-suspend ОТКЛЮЧЁН — flash чип платы не в whitelist ESP-IDF,
+# init_flash assert при старте. Требует другого подхода (fsync batching).
+# CONFIG_SPI_FLASH_AUTO_SUSPEND=y

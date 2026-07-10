@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="page.title">БДКГ-05 · Система</title>
+<style>
+:root{ --accent:#38bdf8; --accent-dim:rgba(56,189,248,.12); --bg:#0d1117; --panel:#161b22; --bd:#21262d; --dim:#8b949e; --txt:#e6edf3; }
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--bg); }
+body{ color:var(--txt); font-family:ui-monospace,'SF Mono','Cascadia Mono','DejaVu Sans Mono',Consolas,monospace; padding-bottom:28px; }
+a{ color:inherit; text-decoration:none; } button{ font-family:inherit; }
+.wrap{ max-width:1460px; margin:0 auto; padding:18px 22px 0; display:flex; flex-direction:column; gap:14px; }
+header{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; border-bottom:1px solid #21262d; }
+.brand{ display:flex; align-items:center; gap:13px; font-weight:700; font-size:16px; color:#e6edf3; }
+.logo{ width:34px; height:34px; border-radius:8px; background:#161b22; border:1px solid #30363d; display:flex; align-items:center; justify-content:center; position:relative; }
+.logo i{ width:15px; height:15px; border-radius:50%; border:2px solid var(--accent); }
+.logo b{ position:absolute; width:5px; height:5px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+.chips{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.chip{ background:#161b22; border:1px solid #30363d; border-radius:999px; padding:6px 12px; font-size:11.5px; color:var(--dim); }
+.chip.ok{ color:#adbac7; display:flex; align-items:center; gap:7px; }
+.chip.warn{ color:#f0c45a; border-color:rgba(240,180,60,.35); }
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 7px var(--accent); }
+.dot.off{ background:#6e7681; box-shadow:none; }
+nav{ display:flex; align-items:center; gap:2px; padding:0 20px; border-bottom:1px solid #21262d; overflow-x:auto; }
+nav a,nav span{ padding:12px 16px; font-size:13px; color:var(--dim); flex-shrink:0; white-space:nowrap; }
+nav .on{ font-weight:600; color:#e6edf3; border-bottom:2px solid var(--accent); }
+.panel{ background:var(--panel); border:1px solid var(--bd); border-radius:10px; padding:16px; }
+.mut{ color:#6e7681; }
+.grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.ttl{ font-size:14px; font-weight:600; color:#e6edf3; margin-bottom:13px; display:flex; align-items:center; gap:8px; }
+.kv{ display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid #21262d; font-size:12.5px; }
+.kv span:first-child{ color:#8b949e; } .kv span:last-child{ color:#c9d1d9; text-align:right; }
+.bar{ height:7px; border-radius:4px; background:#21262d; overflow:hidden; } .bar > i{ display:block; height:100%; border-radius:4px; transition:width .3s,background .3s; }
+.btn{ width:100%; border-radius:8px; padding:9px 0; font-size:12.5px; cursor:pointer; background:#21262d; border:1px solid #30363d; color:var(--txt); margin-top:13px; }
+.btn.green{ background:var(--accent-dim); border-color:rgba(56,189,248,.4); color:var(--accent); font-weight:600; }
+.btn.red{ background:rgba(240,90,80,.07); border-color:rgba(240,90,80,.4); color:#ff8a82; }
+.btn:hover{ filter:brightness(1.2); }
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
+.chip.lang{ cursor:pointer; color:var(--accent); border-color:rgba(56,189,248,.4); font-weight:600; padding:3px 8px; font-size:10.5px; line-height:1.2; min-width:28px; text-align:center; }
+.chip.lang:hover{ filter:brightness(1.15); }
+.boot-row{ display:flex; align-items:center; gap:9px; padding:8px 0; font-size:12.5px; cursor:pointer; border-bottom:1px solid #21262d; color:#c9d1d9; }
+.boot-row input{ width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+.rec{ display:inline-flex; align-items:center; gap:7px; }
+.rec .rdot{ width:8px; height:8px; border-radius:50%; background:#6e7681; }
+.rec.on .rdot{ background:#ff5a50; box-shadow:0 0 8px #ff5a50; }
+select{ background:var(--panel); color:var(--txt); border:1px solid #30363d; border-radius:6px; padding:7px 9px; font:inherit; font-size:12.5px; width:100%; }
+input[type=text],input[type=password]{ background:var(--panel); color:var(--txt); border:1px solid #30363d; border-radius:6px; padding:7px 9px; font:inherit; font-size:12.5px; width:100%; margin-top:6px; }
+.fld-lbl{ font-size:11px; color:#8b949e; margin-top:11px; }
+.sysrow{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; }
+.syscol{ display:flex; flex-direction:column; gap:14px; justify-content:space-between; }
+@media (max-width:900px){ .grid,.sysrow{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<header>
+<div class="brand"><span class="logo"><i></i><b></b></span>БДКГ-05 <span style="color:var(--accent)">&nbsp;Gateway</span></div>
+<div class="chips"><span class="chip ok" id="dev-chip"><span class="dot" id="dev-dot"></span><span id="dev-stat" data-i18n="dev.chipOff">Нет прибора</span></span><span class="chip" id="ip-chip">&mdash;</span><span class="chip lang" id="langBtn">EN</span></div>
+</header>
+<nav>
+<a href="/bdkg" data-i18n="nav.monitor">Мониторинг</a>
+<span class="on" data-i18n="nav.system">Система</span>
+</nav>
+
+<div class="wrap">
+
+<div class="grid">
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9636;</span> ESP32-S3</div>
+<div class="kv"><span data-i18n="esp.chip">Чип</span><span>ESP32-S3 N16R8</span></div>
+<div class="kv"><span data-i18n="esp.flashPsram">Flash / PSRAM</span><span data-i18n="esp.flashPsramVal">16 МБ / 8 МБ</span></div>
+<div class="kv"><span>ESP-IDF</span><span>v5.4</span></div>
+<div class="kv"><span data-i18n="esp.fw">Прошивка</span><span id="fw-ver">&mdash;</span></div>
+<div class="kv"><span data-i18n="esp.uptime">Uptime</span><span id="up">&mdash;</span></div>
+<div class="kv"><span data-i18n="esp.freeHeap">Free heap</span><span id="heap-kv">&mdash;</span></div>
+<div class="kv"><span data-i18n="esp.minHeap">Min free heap</span><span id="heap-min-kv">&mdash;</span></div>
+</section>
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9635;</span> <span data-i18n="flash.title">Flash (LittleFS)</span></div>
+<div class="kv"><span data-i18n="flash.total">Всего</span><span id="flash-total">&mdash;</span></div>
+<div class="kv"><span data-i18n="flash.used">Занято</span><span id="flash-used">&mdash;</span></div>
+<div style="margin-top:12px">
+<div style="display:flex;justify-content:space-between;font-size:11px;color:#6e7681;margin-bottom:5px"><span>LittleFS</span><span id="flash-pct">&mdash;</span></div>
+<div class="bar"><i id="flash-fi" style="width:0%;background:var(--accent)"></i></div>
+</div>
+<div class="mut" style="font-size:11px;line-height:1.5;margin-top:11px" data-i18n="flash.note">Общий раздел storage. Отдельного тома для БДКГ нет.</div>
+</section>
+
+</div>
+
+<div class="grid">
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#8779;</span> WiFi</div>
+<div class="kv"><span data-i18n="wifi.state">Состояние</span><span id="wifi-state">&mdash;</span></div>
+<div class="kv"><span>SSID</span><span id="wifi-ssid">&mdash;</span></div>
+<div class="kv"><span>IP</span><span id="wifi-ip">&mdash;</span></div>
+<div class="kv"><span>RSSI</span><span id="wifi-rssi">&mdash;</span></div>
+<div style="margin-top:12px">
+<div style="display:flex;justify-content:space-between;font-size:11px;color:#6e7681;margin-bottom:5px"><span data-i18n="wifi.signal">Уровень сигнала</span><span id="rssi-desc">&mdash;</span></div>
+<div class="bar"><i id="rssi-fi" style="width:0%;background:var(--accent)"></i></div>
+</div>
+<button class="btn" onclick="resetWifi()" data-i18n="wifi.reset">Сбросить WiFi (режим настройки)</button>
+</section>
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9678;</span> <span data-i18n="dev.title">Прибор · БДКГ-05</span></div>
+<div class="kv"><span>USB</span><span id="bdkg-usb">&mdash;</span></div>
+<div class="kv"><span data-i18n="dev.rec">Запись лога</span><span id="bdkg-rec"><span class="rec"><span class="rdot"></span><span data-i18n="dev.recOff">выкл</span></span></span></div>
+<div class="kv"><span data-i18n="dev.med">МЭД</span><span id="bdkg-med">&mdash;</span></div>
+<div class="kv"><span data-i18n="dev.cps">Скорость счёта</span><span id="bdkg-cps">&mdash;</span></div>
+<div class="kv"><span data-i18n="dev.temp">Температура</span><span id="bdkg-temp">&mdash;</span></div>
+<div class="kv"><span data-i18n="dev.dose">Накопленная доза</span><span id="bdkg-dose">&mdash;</span></div>
+<div class="mut" style="font-size:11px;line-height:1.5;margin-top:10px" data-i18n="dev.note">Показания для справки. Живые графики — на вкладке «Мониторинг».</div>
+</section>
+
+</div>
+
+<div class="sysrow">
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9741;</span> <span data-i18n="mqtt.title">MQTT / Home Assistant</span></div>
+<label class="boot-row"><input type="checkbox" id="mq-en"><span data-i18n="mqtt.enabled">Публиковать в MQTT</span></label>
+<div class="fld-lbl" data-i18n="mqtt.uri">Адрес брокера</div>
+<input type="text" id="mq-uri" placeholder="mqtt://192.168.1.10:1883">
+<div class="fld-lbl" data-i18n="mqtt.user">Логин</div>
+<input type="text" id="mq-user">
+<div class="fld-lbl" data-i18n="mqtt.pass">Пароль</div>
+<input type="password" id="mq-pass" data-i18n-ph="mqtt.passKeep" placeholder="оставьте пустым — не менять">
+<div class="kv" style="margin-top:11px"><span data-i18n="mqtt.conn">Соединение</span><span id="mq-conn">&mdash;</span></div>
+<div class="kv"><span data-i18n="mqtt.pub">Опубликовано</span><span id="mq-pub">&mdash;</span></div>
+<div class="mut" style="font-size:11px;line-height:1.5;margin-top:10px" data-i18n="mqtt.hint">Плата раз в 10 с публикует показания + автодискавери Home Assistant. Без TLS — только для LAN.</div>
+<button class="btn green" onclick="saveMqtt()" data-i18n="mqtt.save">Сохранить</button>
+<div class="mut" id="mq-status" style="font-size:11px;margin-top:7px;text-align:center;min-height:14px"></div>
+</section>
+
+<div class="syscol">
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9654;</span> <span data-i18n="boot.title">Старт платы · БДКГ</span></div>
+<label class="boot-row"><input type="checkbox" id="bc-as-bdkg"><span data-i18n="boot.asBdkg">Запускать запись лога при старте</span></label>
+<label class="boot-row"><input type="checkbox" id="bc-clr-bdkg"><span data-i18n="boot.clrBdkg">Стирать флеш БДКГ при старте</span></label>
+<div class="mut" style="font-size:11px;line-height:1.5;margin-top:10px" data-i18n="boot.hint">Применяется один раз при включении / перезагрузке платы. По умолчанию всё выключено.</div>
+<button class="btn green" onclick="saveBootConfig()" data-i18n="boot.save">Сохранить</button>
+<div class="mut" id="bc-status" style="font-size:11px;margin-top:7px;text-align:center;min-height:14px"></div>
+</section>
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#9201;</span> <span data-i18n="tz.title">Часовой пояс</span></div>
+<select id="tzSel">
+<option value="MSK-2" data-i18n="tz.opt2">Калининград · UTC+2</option>
+<option value="MSK-3" data-i18n="tz.opt3">Москва / СПб · UTC+3</option>
+<option value="MSK-4" data-i18n="tz.opt4">Самара / Ижевск · UTC+4</option>
+<option value="MSK-5" data-i18n="tz.opt5">Екатеринбург · UTC+5</option>
+<option value="MSK-6" data-i18n="tz.opt6">Омск · UTC+6</option>
+<option value="MSK-7" data-i18n="tz.opt7">Красноярск · UTC+7</option>
+<option value="MSK-8" data-i18n="tz.opt8">Иркутск · UTC+8</option>
+<option value="MSK-9" data-i18n="tz.opt9">Якутск · UTC+9</option>
+<option value="MSK-10" data-i18n="tz.opt10">Владивосток · UTC+10</option>
+<option value="MSK-11" data-i18n="tz.opt11">Магадан · UTC+11</option>
+<option value="MSK-12" data-i18n="tz.opt12">Камчатка · UTC+12</option>
+</select>
+<div class="mut" style="font-size:11px;line-height:1.5;margin-top:10px" data-i18n="tz.hint">Местное время для меток в CSV-логе. Без летнего перевода (РФ его не использует).</div>
+<button class="btn green" onclick="saveTz()" data-i18n="tz.save">Сохранить</button>
+<div class="mut" id="tz-status" style="font-size:11px;margin-top:7px;text-align:center;min-height:14px"></div>
+</section>
+
+<section class="panel">
+<div class="ttl"><span style="color:var(--accent)">&#8635;</span> <span data-i18n="reboot.title">Управление платой</span></div>
+<div class="mut" style="font-size:11px;line-height:1.5" data-i18n="reboot.hint">Перезагрузка ESP32. Прибор БДКГ и запись лога продолжат работу после старта согласно настройкам выше.</div>
+<div style="display:flex;gap:8px">
+<button class="btn red" style="margin-top:13px" onclick="rebootEsp()" data-i18n="btn.rebootEsp">Reboot ESP</button>
+<button class="btn green" style="margin-top:13px" onclick="location.reload()" data-i18n="btn.refresh">Обновить</button>
+</div>
+</section>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+"use strict";
+var DICT={
+ ru:{
+  "page.title":"БДКГ-05 · Система",
+  "nav.monitor":"Мониторинг","nav.system":"Система",
+  "esp.chip":"Чип","esp.flashPsram":"Flash / PSRAM","esp.flashPsramVal":"16 МБ / 8 МБ",
+  "esp.fw":"Прошивка","esp.uptime":"Uptime","esp.freeHeap":"Free heap","esp.minHeap":"Min free heap",
+  "unit.kb":"КБ",
+  "flash.title":"Flash (LittleFS)","flash.total":"Всего","flash.used":"Занято",
+  "flash.note":"Общий раздел storage. Отдельного тома для БДКГ нет.",
+  "wifi.state":"Состояние","wifi.signal":"Уровень сигнала","wifi.reset":"Сбросить WiFi (режим настройки)",
+  "wifi.connected":"подключено","wifi.disconnected":"не подключено",
+  "wifi.q.excellent":"отличный","wifi.q.good":"хороший","wifi.q.med":"средний","wifi.q.weak":"слабый","wifi.q.veryWeak":"очень слабый",
+  "dev.title":"Прибор · БДКГ-05","dev.chipOk":"Прибор подключён","dev.chipOff":"Нет прибора",
+  "dev.connected":"подключён","dev.disconnected":"адаптер не найден",
+  "dev.rec":"Запись лога","dev.recOn":"вкл","dev.recOff":"выкл",
+  "dev.med":"МЭД","dev.cps":"Скорость счёта","dev.temp":"Температура","dev.dose":"Накопленная доза",
+  "dev.note":"Показания для справки. Живые графики — на вкладке «Мониторинг».",
+  "boot.title":"Старт платы · БДКГ","boot.asBdkg":"Запускать запись лога при старте","boot.clrBdkg":"Стирать флеш БДКГ при старте",
+  "boot.hint":"Применяется один раз при включении / перезагрузке платы. По умолчанию всё выключено.",
+  "boot.save":"Сохранить","boot.saved":"Сохранено","boot.saveErr":"Ошибка сохранения",
+  "tz.title":"Часовой пояс",
+  "tz.opt2":"Калининград · UTC+2","tz.opt3":"Москва / СПб · UTC+3","tz.opt4":"Самара / Ижевск · UTC+4","tz.opt5":"Екатеринбург · UTC+5","tz.opt6":"Омск · UTC+6","tz.opt7":"Красноярск · UTC+7","tz.opt8":"Иркутск · UTC+8","tz.opt9":"Якутск · UTC+9","tz.opt10":"Владивосток · UTC+10","tz.opt11":"Магадан · UTC+11","tz.opt12":"Камчатка · UTC+12",
+  "tz.hint":"Местное время для меток в CSV-логе. Без летнего перевода (РФ его не использует).",
+  "tz.save":"Сохранить","tz.saved":"Сохранено","tz.saveErr":"Ошибка сохранения",
+  "mqtt.title":"MQTT / Home Assistant","mqtt.enabled":"Публиковать в MQTT","mqtt.uri":"Адрес брокера","mqtt.user":"Логин","mqtt.pass":"Пароль","mqtt.passKeep":"оставьте пустым — не менять","mqtt.conn":"Соединение","mqtt.connYes":"подключено","mqtt.connNo":"нет","mqtt.pub":"Опубликовано","mqtt.save":"Сохранить","mqtt.saved":"Сохранено","mqtt.saveErr":"Ошибка","mqtt.hint":"Плата раз в 10 с публикует показания + автодискавери Home Assistant. Без TLS — только для LAN.",
+  "reboot.title":"Управление платой",
+  "reboot.hint":"Перезагрузка ESP32. Прибор БДКГ и запись лога продолжат работу после старта согласно настройкам выше.",
+  "btn.rebootEsp":"Reboot ESP","btn.refresh":"Обновить",
+  "confirm.rebootEsp":"Перезагрузить ESP32?","confirm.resetWifi":"Сбросить WiFi и войти в режим настройки?",
+  "up.d":"д","up.h":"ч","up.m":"м","up.s":"с"
+ },
+ en:{
+  "page.title":"BDKG-05 · System",
+  "nav.monitor":"Monitoring","nav.system":"System",
+  "esp.chip":"Chip","esp.flashPsram":"Flash / PSRAM","esp.flashPsramVal":"16 MB / 8 MB",
+  "esp.fw":"Firmware","esp.uptime":"Uptime","esp.freeHeap":"Free heap","esp.minHeap":"Min free heap",
+  "unit.kb":"KB",
+  "flash.title":"Flash (LittleFS)","flash.total":"Total","flash.used":"Used",
+  "flash.note":"Shared storage partition. No dedicated volume for BDKG.",
+  "wifi.state":"State","wifi.signal":"Signal level","wifi.reset":"Reset WiFi (setup mode)",
+  "wifi.connected":"connected","wifi.disconnected":"disconnected",
+  "wifi.q.excellent":"excellent","wifi.q.good":"good","wifi.q.med":"fair","wifi.q.weak":"weak","wifi.q.veryWeak":"very weak",
+  "dev.title":"Device · BDKG-05","dev.chipOk":"Device connected","dev.chipOff":"No device",
+  "dev.connected":"connected","dev.disconnected":"adapter not found",
+  "dev.rec":"Log recording","dev.recOn":"on","dev.recOff":"off",
+  "dev.med":"Dose rate","dev.cps":"Count rate","dev.temp":"Temperature","dev.dose":"Accumulated dose",
+  "dev.note":"Readings for reference. Live charts are on the “Monitoring” tab.",
+  "boot.title":"Board start · BDKG","boot.asBdkg":"Start log recording on boot","boot.clrBdkg":"Clear BDKG flash on boot",
+  "boot.hint":"Applied once on power-up / board reboot. Everything is off by default.",
+  "boot.save":"Save","boot.saved":"Saved","boot.saveErr":"Save error",
+  "tz.title":"Time zone",
+  "tz.opt2":"Kaliningrad · UTC+2","tz.opt3":"Moscow / SPb · UTC+3","tz.opt4":"Samara / Izhevsk · UTC+4","tz.opt5":"Yekaterinburg · UTC+5","tz.opt6":"Omsk · UTC+6","tz.opt7":"Krasnoyarsk · UTC+7","tz.opt8":"Irkutsk · UTC+8","tz.opt9":"Yakutsk · UTC+9","tz.opt10":"Vladivostok · UTC+10","tz.opt11":"Magadan · UTC+11","tz.opt12":"Kamchatka · UTC+12",
+  "tz.hint":"Local time for CSV log timestamps. No daylight saving (RU does not use it).",
+  "tz.save":"Save","tz.saved":"Saved","tz.saveErr":"Save error",
+  "mqtt.title":"MQTT / Home Assistant","mqtt.enabled":"Publish to MQTT","mqtt.uri":"Broker URI","mqtt.user":"Username","mqtt.pass":"Password","mqtt.passKeep":"leave empty to keep current","mqtt.conn":"Connection","mqtt.connYes":"connected","mqtt.connNo":"none","mqtt.pub":"Published","mqtt.save":"Save","mqtt.saved":"Saved","mqtt.saveErr":"Error","mqtt.hint":"Board publishes readings every 10 s + Home Assistant autodiscovery. No TLS — LAN only.",
+  "reboot.title":"Board control",
+  "reboot.hint":"Reboots the ESP32. The BDKG device and log recording resume on start per the settings above.",
+  "btn.rebootEsp":"Reboot ESP","btn.refresh":"Refresh",
+  "confirm.rebootEsp":"Reboot ESP32?","confirm.resetWifi":"Reset WiFi and enter setup mode?",
+  "up.d":"d","up.h":"h","up.m":"m","up.s":"s"
+ }
+};
+var LANG=(function(){try{return localStorage.getItem("bdkg-lang")||"ru";}catch(e){return"ru";}})();
+function t(k){var d=DICT[LANG]||DICT.ru;return(d[k]!==undefined)?d[k]:(DICT.ru[k]||k);}
+function applyI18n(){
+ document.querySelectorAll("[data-i18n]").forEach(function(el){
+  var k=el.getAttribute("data-i18n"); el.textContent=t(k);
+ });
+ document.querySelectorAll("[data-i18n-ph]").forEach(function(el){
+  el.setAttribute("placeholder",t(el.getAttribute("data-i18n-ph")));
+ });
+ document.documentElement.lang=LANG;
+ document.title=t("page.title");
+ var b=document.getElementById("langBtn"); if(b)b.textContent=(LANG==="ru")?"EN":"RU";
+}
+function setLang(l){
+ if(l!=="ru"&&l!=="en")l="ru";
+ LANG=l; try{localStorage.setItem("bdkg-lang",l);}catch(e){}
+ applyI18n();
+ try{refreshSystem();refreshBdkg();}catch(e){}
+}
+
+var csrfToken="";
+async function loadCsrf(){try{var r=await(await fetch("/api/csrf-token")).json();csrfToken=r.token||"";}catch(e){}}
+function post(url,opts){opts=opts||{};opts.method="POST";opts.headers=Object.assign({},opts.headers||{},{"X-CSRF-Token":csrfToken});return fetch(url,opts);}
+
+function fmtKB(n){return (n/1024).toFixed(0);}
+function fmtUp(s){var d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),x=s%60;
+ var p=[]; if(d>0)p.push(d+t("up.d")); if(d>0||h>0)p.push(h+t("up.h")); p.push(m+t("up.m")); if(d===0)p.push(x+t("up.s")); return p.join(" ");}
+
+async function refreshSystem(){
+ try{
+  var r=await(await fetch("/api/system")).json();
+  var heapKB=Math.round((r.free_heap||0)/1024);
+  document.getElementById("fw-ver").textContent=r.fw_version||"—";
+  document.getElementById("up").textContent=fmtUp(r.uptime_sec||0);
+  document.getElementById("heap-kv").textContent=heapKB+" "+t("unit.kb");
+  document.getElementById("heap-min-kv").textContent=Math.round((r.min_free_heap||0)/1024)+" "+t("unit.kb");
+  var ft=r.flash_total||0, fu=r.flash_used||0, pct=ft>0?(fu/ft*100):0;
+  document.getElementById("flash-total").textContent=fmtKB(ft)+" "+t("unit.kb");
+  document.getElementById("flash-used").textContent=fmtKB(fu)+" "+t("unit.kb");
+  document.getElementById("flash-pct").textContent=pct.toFixed(1)+"%";
+  var ffi=document.getElementById("flash-fi");
+  ffi.style.width=pct.toFixed(1)+"%";
+  ffi.style.background=pct>90?"#ff8a82":pct>70?"#f0c45a":"var(--accent)";
+  if(r.wifi_connected){
+   document.getElementById("wifi-state").innerHTML='<span style="color:var(--accent)">'+t("wifi.connected")+'</span>';
+   document.getElementById("wifi-ssid").textContent=r.ssid||"—";
+   document.getElementById("wifi-ip").textContent=location.hostname;
+   var rssi=r.rssi;
+   if(typeof rssi==="number"){
+    var qPct=Math.max(0,Math.min(100,(rssi+100)*100/60));
+    var qDesc=rssi>=-55?t("wifi.q.excellent"):rssi>=-65?t("wifi.q.good"):rssi>=-75?t("wifi.q.med"):rssi>=-85?t("wifi.q.weak"):t("wifi.q.veryWeak");
+    document.getElementById("wifi-rssi").textContent=rssi+" dBm";
+    document.getElementById("rssi-desc").textContent=rssi+" dBm · "+qDesc;
+    var rfi=document.getElementById("rssi-fi");
+    rfi.style.width=qPct.toFixed(0)+"%";
+    rfi.style.background=qPct>=70?"var(--accent)":qPct>=40?"#f0c45a":"#ff8a82";
+   }else{ document.getElementById("wifi-rssi").textContent="—"; }
+  }else{
+   document.getElementById("wifi-state").innerHTML='<span style="color:#ff8a82">'+t("wifi.disconnected")+'</span>';
+   document.getElementById("wifi-ssid").textContent="—";
+   document.getElementById("wifi-ip").textContent=location.hostname;
+   document.getElementById("wifi-rssi").textContent="—";
+  }
+ }catch(e){}
+}
+
+// БДКГ-статус берём СТРОГО из /api/bdkg (connected = USB-адаптер прибора),
+// НЕ из /api/system usb_connected (то — FTDI аналитического USB, другое устройство).
+async function refreshBdkg(){
+ try{
+  var d=await(await fetch("/api/bdkg",{cache:"no-store"})).json();
+  var dot=document.getElementById("dev-dot"), stat=document.getElementById("dev-stat"), chip=document.getElementById("dev-chip");
+  if(d.connected){
+   dot.classList.remove("off"); stat.textContent=t("dev.chipOk"); chip.classList.remove("warn"); chip.classList.add("ok");
+   document.getElementById("bdkg-usb").innerHTML='<span style="color:var(--accent)">'+t("dev.connected")+'</span>';
+  }else{
+   dot.classList.add("off"); stat.textContent=t("dev.chipOff"); chip.classList.add("warn"); chip.classList.remove("ok");
+   document.getElementById("bdkg-usb").innerHTML='<span style="color:#ff8a82">'+t("dev.disconnected")+'</span>';
+  }
+  var rec=!!d.recording;
+  document.getElementById("bdkg-rec").innerHTML='<span class="rec'+(rec?" on":"")+'"><span class="rdot"></span>'+(rec?t("dev.recOn"):t("dev.recOff"))+'</span>';
+  if(d.valid){
+   document.getElementById("bdkg-med").textContent=(typeof d.med_usv_h==="number")?d.med_usv_h.toFixed(3)+" мкЗв/ч":"—";
+   document.getElementById("bdkg-cps").textContent=(typeof d.cps==="number")?d.cps.toFixed(1)+" имп/с":"—";
+   document.getElementById("bdkg-temp").textContent=(typeof d.temp_c==="number")?d.temp_c.toFixed(1)+" °C":"—";
+   document.getElementById("bdkg-dose").textContent=(typeof d.dose_usv==="number")?d.dose_usv.toFixed(3)+" мкЗв":"—";
+  }else{
+   document.getElementById("bdkg-med").textContent="—";
+   document.getElementById("bdkg-cps").textContent="—";
+   document.getElementById("bdkg-temp").textContent="—";
+   document.getElementById("bdkg-dose").textContent="—";
+  }
+ }catch(e){}
+}
+
+async function loadBootConfig(){
+ try{
+  var r=await(await fetch("/api/boot-config")).json();
+  document.getElementById("bc-as-bdkg").checked=!!r.autostart_bdkg_log;
+  document.getElementById("bc-clr-bdkg").checked=!!r.clear_bdkg_storage;
+ }catch(e){}
+}
+async function saveBootConfig(){
+ var s=document.getElementById("bc-status");
+ var body={
+  autostart_bdkg_log:document.getElementById("bc-as-bdkg").checked,
+  clear_bdkg_storage:document.getElementById("bc-clr-bdkg").checked
+ };
+ try{
+  var r=await(await post("/api/boot-config",{headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  s.textContent=r.ok?t("boot.saved"):t("boot.saveErr");
+  s.style.color=r.ok?"var(--accent)":"#ff8a82";
+ }catch(e){ s.textContent=t("boot.saveErr"); s.style.color="#ff8a82"; }
+ setTimeout(function(){s.textContent="";},2500);
+}
+
+async function loadTz(){
+ try{
+  var r=await(await fetch("/api/tz")).json();
+  var tz=r.tz||"MSK-3";
+  var sel=document.getElementById("tzSel");
+  var found=false;
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===tz){ sel.selectedIndex=i; found=true; break; } }
+  if(!found){ var o=document.createElement("option"); o.value=tz; o.textContent=tz; sel.appendChild(o); sel.value=tz; }
+ }catch(e){}
+}
+async function saveTz(){
+ var s=document.getElementById("tz-status");
+ var tz=document.getElementById("tzSel").value;
+ try{
+  var r=await(await post("/api/tz",{headers:{"Content-Type":"application/json"},body:JSON.stringify({tz:tz})})).json();
+  s.textContent=r.ok?t("tz.saved"):t("tz.saveErr");
+  s.style.color=r.ok?"var(--accent)":"#ff8a82";
+ }catch(e){ s.textContent=t("tz.saveErr"); s.style.color="#ff8a82"; }
+ setTimeout(function(){s.textContent="";},2500);
+}
+
+async function loadMqtt(){
+ try{ var r=await(await fetch("/api/bdkg/mqtt")).json();
+  document.getElementById("mq-en").checked=!!r.enabled;
+  document.getElementById("mq-uri").value=r.uri||"";
+  document.getElementById("mq-user").value=r.user||"";
+  document.getElementById("mq-pass").value=""; // никогда не префилл пароль
+  if(r.has_pass) document.getElementById("mq-pass").placeholder=t("mqtt.passKeep");
+  document.getElementById("mq-conn").innerHTML=r.connected?'<span style="color:var(--accent)">'+t("mqtt.connYes")+'</span>':'<span style="color:#ff8a82">'+t("mqtt.connNo")+'</span>';
+  document.getElementById("mq-pub").textContent=(r.published||0);
+ }catch(e){}
+}
+async function saveMqtt(){
+ var s=document.getElementById("mq-status");
+ var body={ enabled:document.getElementById("mq-en").checked, uri:document.getElementById("mq-uri").value.trim(), user:document.getElementById("mq-user").value.trim(), pass:document.getElementById("mq-pass").value };
+ try{ var r=await(await post("/api/bdkg/mqtt",{headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  s.textContent=r.ok?t("mqtt.saved"):t("mqtt.saveErr"); s.style.color=r.ok?"var(--accent)":"#ff8a82";
+  if(r.ok){document.getElementById("mq-pass").value="";loadMqtt();}
+ }catch(e){ s.textContent=t("mqtt.saveErr"); s.style.color="#ff8a82"; }
+ setTimeout(function(){s.textContent="";},2500);
+}
+async function rebootEsp(){if(!confirm(t("confirm.rebootEsp")))return;await post("/api/reboot-esp");}
+async function resetWifi(){if(!confirm(t("confirm.resetWifi")))return;await post("/api/wifi/reset");}
+
+(async function(){
+ applyI18n();
+ document.getElementById("langBtn").onclick=function(){setLang(LANG==="ru"?"en":"ru");};
+ document.getElementById("ip-chip").textContent=location.hostname;
+ await loadCsrf();
+ await refreshSystem();
+ await refreshBdkg();
+ await loadBootConfig();
+ await loadTz();
+ await loadMqtt();
+ setInterval(refreshSystem,2000);
+ setInterval(refreshBdkg,1500);
+ setInterval(loadMqtt,3000);
+})();
+</script>
+</body>
+</html>
