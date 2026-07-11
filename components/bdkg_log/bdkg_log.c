@@ -312,6 +312,15 @@ static esp_err_t h_log_stop(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// #BDKG-43: Стереть флеш-архив (кольцевой буфер) через HTTP.
+static esp_err_t h_clear(httpd_req_t *req) {
+    if (!web_csrf_check(req)) return ESP_FAIL;
+    bdkg_log_clear_storage();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 void bdkg_log_register(httpd_handle_t server) {
     httpd_uri_t u_logs = { .uri="/api/bdkg/logs", .method=HTTP_GET, .handler=h_logs, .user_ctx=NULL };
     httpd_register_uri_handler(server, &u_logs);
@@ -321,4 +330,6 @@ void bdkg_log_register(httpd_handle_t server) {
     httpd_register_uri_handler(server, &u_start);
     httpd_uri_t u_stop = { .uri="/api/bdkg/log/stop", .method=HTTP_POST, .handler=h_log_stop, .user_ctx=NULL };
     httpd_register_uri_handler(server, &u_stop);
+    httpd_uri_t u_clr = { .uri="/api/bdkg/logs/clear", .method=HTTP_POST, .handler=h_clear, .user_ctx=NULL };
+    httpd_register_uri_handler(server, &u_clr);
 }
